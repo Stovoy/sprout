@@ -270,8 +270,8 @@ fn save_metadata(path: &Path, metadata: &Metadata) -> Result<()> {
 }
 
 fn sprout_paths() -> Result<SproutPaths> {
-    let home = env::var("HOME").context("HOME not set")?;
-    let root = PathBuf::from(home).join(".sprout");
+    let home = dirs::home_dir().context("home directory not found")?;
+    let root = home.join(".sprout");
     Ok(SproutPaths {
         worktrees_dir: root.join("worktrees"),
         metadata_path: root.join("metadata.json"),
@@ -280,12 +280,21 @@ fn sprout_paths() -> Result<SproutPaths> {
 }
 
 fn launch_shell(path: &Path) -> Result<()> {
-    let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-    let status = Command::new(shell)
-        .arg("-i")
-        .current_dir(path)
-        .status()
-        .context("failed to launch shell")?;
+    let status = if cfg!(windows) {
+        let comspec = env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+        Command::new(comspec)
+            .args(["/K", "cd", "/d"])
+            .arg(path)
+            .status()
+            .context("failed to launch shell")?
+    } else {
+        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+        Command::new(shell)
+            .arg("-i")
+            .current_dir(path)
+            .status()
+            .context("failed to launch shell")?
+    };
     if !status.success() {
         bail!("shell exited with error");
     }

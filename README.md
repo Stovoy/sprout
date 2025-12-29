@@ -45,3 +45,4 @@ branch_prefix = "sprout/"
 
 - `sprout cd` and `sprout base` spawn a new interactive shell in the target directory.
 - Worktree names are global across repos.
+- Windows uses `cmd.exe` by default (via `COMSPEC`) for the spawned shell.
