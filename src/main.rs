@@ -281,10 +281,10 @@ fn sprout_paths() -> Result<SproutPaths> {
 
 fn launch_shell(path: &Path) -> Result<()> {
     let status = if cfg!(windows) {
+        let path = windows_cmd_path_str(path);
         let comspec = env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
         Command::new(comspec)
-            .args(["/K", "cd", "/d"])
-            .arg(path)
+            .args(["/K", "cd", "/d", path.as_str()])
             .status()
             .context("failed to launch shell")?
     } else {
@@ -299,6 +299,20 @@ fn launch_shell(path: &Path) -> Result<()> {
         bail!("shell exited with error");
     }
     Ok(())
+}
+
+fn windows_cmd_path_str(path: &Path) -> String {
+    if !cfg!(windows) {
+        return path.to_string_lossy().to_string();
+    }
+    let path_str = path.to_string_lossy();
+    if let Some(rest) = path_str.strip_prefix(r"\\?\UNC\") {
+        return format!("\\{}", rest);
+    }
+    if let Some(rest) = path_str.strip_prefix(r"\\?\") {
+        return rest.to_string();
+    }
+    path_str.to_string()
 }
 
 fn now_ts() -> Result<i64> {
