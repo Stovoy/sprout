@@ -138,6 +138,7 @@ fn cd_base() -> Result<()> {
     match entry {
         Some(entry) => print_cd_path(Path::new(&entry.source_repo)),
         None => {
+            let repo_root = canonicalize_for_cd(&repo_root)?;
             println!("{}", repo_root.display());
             Ok(())
         }
@@ -158,12 +159,14 @@ fn list_worktrees() -> Result<()> {
 
     let mut table = Table::new();
     table.load_preset(comfy_table::presets::ASCII_MARKDOWN);
-    table.set_header(vec!["Name", "Repo", "Path", "Branch", "Last Commit"]);
+    table.set_header(vec!["Name", "Repo", "Path", "Branch", "Last Commit"]);    
     for (ts, entry) in rows {
+        let display_repo = display_path(&entry.source_repo);
+        let display_path = display_path(&entry.path);
         table.add_row(vec![
             Cell::new(entry.name),
-            Cell::new(entry.source_repo),
-            Cell::new(entry.path),
+            Cell::new(display_repo),
+            Cell::new(display_path),
             Cell::new(entry.branch),
             Cell::new(format_ts(ts)),
         ]);
@@ -279,9 +282,51 @@ fn sprout_paths() -> Result<SproutPaths> {
 }
 
 fn print_cd_path(path: &Path) -> Result<()> {
-    let path = fs::canonicalize(path)?;
+    let path = canonicalize_for_cd(path)?;
     println!("{}", path.display());
     Ok(())
+}
+
+fn canonicalize_for_cd(path: &Path) -> Result<PathBuf> {
+    let canonical = fs::canonicalize(path)?;
+    #[cfg(windows)]
+    {
+        if let Some(stripped) = strip_verbatim_windows_prefix(&canonical) {
+            return Ok(stripped);
+        }
+    }
+    Ok(canonical)
+}
+
+fn display_path(path: &str) -> String {
+    canonicalize_for_cd(Path::new(path))
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or_else(|_| path.to_string())
+}
+
+#[cfg(windows)]
+fn strip_verbatim_windows_prefix(path: &Path) -> Option<PathBuf> {
+    use std::path::{Component, Prefix};
+
+    let mut components = path.components();
+    let prefix = match components.next()? {
+        Component::Prefix(prefix) => prefix.kind(),
+        _ => return None,
+    };
+    let rest: PathBuf = components.collect();
+    match prefix {
+        Prefix::VerbatimDisk(letter) => {
+            let drive = format!("{}:", letter as char);
+            Some(PathBuf::from(drive).join(rest))
+        }
+        Prefix::VerbatimUNC(server, share) => {
+            let mut base = PathBuf::from(r"\\");
+            base.push(server);
+            base.push(share);
+            Some(base.join(rest))
+        }
+        _ => None,
+    }
 }
 
 fn now_ts() -> Result<i64> {
