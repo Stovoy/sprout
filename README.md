@@ -10,6 +10,7 @@ Minimal git worktree manager.
 - `sprout list` / `sprout ls` lists all tracked worktrees in a table sorted by last commit time.
 - `sprout delete <worktree>` removes the worktree and its metadata entry.
 - `sprout config get|set branch_prefix` reads or updates `~/.sprout/config.toml`.
+- `sprout config get|set copy_paths` reads or updates `~/.sprout/config.toml`.
 
 ## Install (local)
 
@@ -27,6 +28,8 @@ sprout list
 sprout delete my-feature
 sprout config get branch_prefix
 sprout config set branch_prefix sprout/
+sprout config get copy_paths
+sprout config set copy_paths .godot,.vscode
 ```
 
 ## Config
@@ -35,6 +38,7 @@ sprout config set branch_prefix sprout/
 
 ```toml
 branch_prefix = "sprout/"
+copy_paths = [".godot", ".vscode"]
 ```
 
 ## Metadata

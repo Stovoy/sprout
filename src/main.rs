@@ -39,6 +39,7 @@ enum ConfigAction {
 #[derive(Deserialize, Serialize, Default)]
 struct Config {
     branch_prefix: Option<String>,
+    copy_paths: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -100,6 +101,10 @@ fn create_worktree(name: &str) -> Result<()> {
             worktree_path.to_str().ok_or_else(|| anyhow!("invalid path"))?,
         ],
     )?;
+
+    if let Some(copy_paths) = &config.copy_paths {
+        copy_config_paths(&repo_root, &worktree_path, copy_paths)?;
+    }
 
     let worktree_path = fs::canonicalize(&worktree_path)?;
     metadata.worktrees.push(WorktreeEntry {
@@ -377,6 +382,11 @@ fn config_get(path: &Path, key: &str) -> Result<()> {
             println!("{value}");
             Ok(())
         }
+        "copy_paths" => {
+            let value = config.copy_paths.unwrap_or_default();
+            println!("{}", value.join(","));
+            Ok(())
+        }
         _ => bail!("unknown config key: {}", key),
     }
 }
@@ -387,8 +397,78 @@ fn config_set(path: &Path, key: &str, value: &str) -> Result<()> {
         "branch_prefix" => {
             config.branch_prefix = Some(value.to_string());
         }
+        "copy_paths" => {
+            let entries: Vec<String> = value
+                .split(',')
+                .map(|entry| entry.trim())
+                .filter(|entry| !entry.is_empty())
+                .map(|entry| entry.to_string())
+                .collect();
+            if entries.is_empty() {
+                config.copy_paths = None;
+            } else {
+                config.copy_paths = Some(entries);
+            }
+        }
         _ => bail!("unknown config key: {}", key),
     }
     save_config(path, &config)?;
+    Ok(())
+}
+
+fn copy_config_paths(repo_root: &Path, worktree_root: &Path, paths: &[String]) -> Result<()> {
+    for entry in paths {
+        let relative = Path::new(entry);
+        if relative.is_absolute() {
+            eprintln!("copy_paths entry is absolute, skipping: {}", entry);
+            continue;
+        }
+        let source = repo_root.join(relative);
+        if !source.exists() {
+            eprintln!(
+                "copy_paths entry not found, skipping: {}",
+                source.display()
+            );
+            continue;
+        }
+        let destination = worktree_root.join(relative);
+        copy_recursively(&source, &destination)
+            .with_context(|| format!("copying {}", source.display()))?;
+    }
+    Ok(())
+}
+
+fn copy_recursively(source: &Path, destination: &Path) -> Result<()> {
+    let metadata = fs::symlink_metadata(source)?;
+    if metadata.file_type().is_symlink() {
+        eprintln!("copy_paths entry is a symlink, skipping: {}", source.display());
+        return Ok(());
+    }
+
+    if metadata.is_dir() {
+        fs::create_dir_all(destination)?;
+        for entry in fs::read_dir(source)? {
+            let entry = entry?;
+            let child_source = entry.path();
+            let child_destination = destination.join(entry.file_name());
+            copy_recursively(&child_source, &child_destination)?;
+        }
+        return Ok(());
+    }
+
+    if metadata.is_file() {
+        if destination.exists() {
+            eprintln!(
+                "copy_paths destination exists, skipping: {}",
+                destination.display()
+            );
+            return Ok(());
+        }
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(source, destination)?;
+    }
+
     Ok(())
 }
