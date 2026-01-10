@@ -5,8 +5,8 @@ Minimal git worktree manager.
 ## What it does
 
 - `sprout create <worktree>` creates a new worktree under `~/.sprout/worktrees` and a new branch.
-- `sprout cd <worktree>` opens an interactive shell in that worktree.
-- `sprout base` opens a shell in the source repo when run from a worktree.
+- `sprout cd <worktree>` prints the worktree path so your current shell can `cd` there.
+- `sprout base` prints the source repo path when run from a worktree.
 - `sprout list` / `sprout ls` lists all tracked worktrees in a table sorted by last commit time.
 - `sprout delete <worktree>` removes the worktree and its metadata entry.
 - `sprout config get|set branch_prefix` reads or updates `~/.sprout/config.toml`.
@@ -21,8 +21,8 @@ cargo install --path .
 
 ```bash
 sprout create my-feature
-sprout cd my-feature
-sprout base
+cd "$(sprout cd my-feature)"
+cd "$(sprout base)"
 sprout list
 sprout delete my-feature
 sprout config get branch_prefix
@@ -43,6 +43,5 @@ branch_prefix = "sprout/"
 
 ## Notes
 
-- `sprout cd` and `sprout base` spawn a new interactive shell in the target directory.
+- `sprout cd` and `sprout base` print paths for shell integration.
 - Worktree names are global across repos.
-- Windows uses `cmd.exe` by default (via `COMSPEC`) for the spawned shell.

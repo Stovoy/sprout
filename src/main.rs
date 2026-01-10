@@ -1,4 +1,3 @@
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -111,7 +110,7 @@ fn create_worktree(name: &str) -> Result<()> {
     });
     save_metadata(&paths.metadata_path, &metadata)?;
 
-    launch_shell(&worktree_path)
+    print_cd_path(&worktree_path)
 }
 
 fn cd_worktree(name: &str) -> Result<()> {
@@ -123,7 +122,7 @@ fn cd_worktree(name: &str) -> Result<()> {
         .find(|entry| entry.name == name)
         .ok_or_else(|| anyhow!("unknown worktree: {}", name))?;
 
-    launch_shell(Path::new(&entry.path))
+    print_cd_path(Path::new(&entry.path))
 }
 
 fn cd_base() -> Result<()> {
@@ -137,7 +136,7 @@ fn cd_base() -> Result<()> {
     });
 
     match entry {
-        Some(entry) => launch_shell(Path::new(&entry.source_repo)),
+        Some(entry) => print_cd_path(Path::new(&entry.source_repo)),
         None => {
             println!("{}", repo_root.display());
             Ok(())
@@ -279,40 +278,10 @@ fn sprout_paths() -> Result<SproutPaths> {
     })
 }
 
-fn launch_shell(path: &Path) -> Result<()> {
-    let status = if cfg!(windows) {
-        let path = windows_cmd_path_str(path);
-        let comspec = env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-        Command::new(comspec)
-            .args(["/K", "cd", "/d", path.as_str()])
-            .status()
-            .context("failed to launch shell")?
-    } else {
-        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-        Command::new(shell)
-            .arg("-i")
-            .current_dir(path)
-            .status()
-            .context("failed to launch shell")?
-    };
-    if !status.success() {
-        bail!("shell exited with error");
-    }
+fn print_cd_path(path: &Path) -> Result<()> {
+    let path = fs::canonicalize(path)?;
+    println!("{}", path.display());
     Ok(())
-}
-
-fn windows_cmd_path_str(path: &Path) -> String {
-    if !cfg!(windows) {
-        return path.to_string_lossy().to_string();
-    }
-    let path_str = path.to_string_lossy();
-    if let Some(rest) = path_str.strip_prefix(r"\\?\UNC\") {
-        return format!("\\{}", rest);
-    }
-    if let Some(rest) = path_str.strip_prefix(r"\\?\") {
-        return rest.to_string();
-    }
-    path_str.to_string()
 }
 
 fn now_ts() -> Result<i64> {
