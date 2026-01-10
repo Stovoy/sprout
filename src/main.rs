@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -178,7 +179,15 @@ fn list_worktrees() -> Result<()> {
         ]);
     }
 
-    println!("{table}");
+    let output = table.to_string();
+    if cfg!(windows) {
+        let mut stdout = io::stdout();
+        for line in output.lines() {
+            writeln!(stdout, "{line}")?;
+        }
+    } else {
+        print!("{output}");
+    }
     Ok(())
 }
 
